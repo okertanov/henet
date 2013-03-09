@@ -3,9 +3,8 @@ henet - high availability network library
 
 Transcription
 =============
-
-&#x5D4;
--------
+&#x5D4;net
+----------
 
 Rationale
 ---------
