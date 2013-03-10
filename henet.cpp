@@ -47,6 +47,86 @@ socket::~socket()
     close();
 }
 
+std::vector<unsigned char> socket::read() const
+{
+    std::vector<unsigned char> buffer(8192);
+    ssize_t rd = ::read(socket_, &buffer[0], buffer.size());
+
+    if (rd < 0)
+    {
+        throw std::runtime_error(::strerror(errno));
+    }
+
+    buffer.resize(rd);
+
+    return buffer;
+}
+
+size_t socket::write(const std::vector<unsigned char>& buffer) const
+{
+    size_t rc = 0;
+
+    if (buffer.size() > 0)
+    {
+        ssize_t wr = ::write(socket_, &buffer[0], buffer.size());
+
+        if (wr < 0)
+        {
+            throw std::runtime_error(::strerror(errno));
+        }
+
+        rc = static_cast<size_t>(wr);
+    }
+
+    return rc;
+}
+
+size_t socket::write_file(std::string filename) const
+{
+    size_t rc = 0;
+    int fd = -1;
+
+    try
+    {
+        // @todo convert to RAII
+        fd = ::open(filename.c_str(), O_RDONLY);
+
+        if (fd == -1)
+        {
+            throw std::runtime_error(std::string("open() exception: ") + ::strerror(errno));
+        }
+
+        struct stat sb;
+        int st = ::fstat(fd, &sb);
+
+        if (st == -1)
+        {
+            throw std::runtime_error(std::string("stat() exception: ") + ::strerror(errno));
+        }
+
+        off_t foffset = 0;
+        size_t size = sb.st_size;
+        ssize_t wr = ::sendfile(socket_, fd, &foffset, size);
+
+        if (wr < 0)
+        {
+            throw std::runtime_error(std::string("sendfile() exception: ") + ::strerror(errno));
+        }
+
+        rc = static_cast<size_t>(wr);
+    }
+    catch(std::exception& e)
+    {
+        ::close(fd);
+
+        throw;
+    }
+
+    ::close(fd);
+
+    return rc;
+}
+
 void socket::close()
 {
     if (socket_ >= 0)

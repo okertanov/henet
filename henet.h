@@ -20,12 +20,16 @@
 #include <exception>
 #include <stdexcept>
 
+#include <stdio.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <sys/sendfile.h>
 
 namespace ha
 {
@@ -49,6 +53,10 @@ class socket
         socket(const socket& other);
         socket(socket&& other);
         virtual ~socket();
+
+        std::vector<unsigned char> read() const;
+        size_t write(const std::vector<unsigned char>& buffer) const;
+        size_t write_file(std::string filename) const;
 
         void close();
 
