@@ -100,25 +100,40 @@ address::address()
 }
 
 address::address(sockaddr saddr)
+    : sockaddr_(saddr)
 {
-    sockaddr_ = saddr;
 }
 
-address::address(short family, unsigned short port, in_addr addr)
+address::address(short family, in_addr addr, unsigned short port)
+    : sockaddr_({0})
 {
-    sockaddr_in* saddr = ((sockaddr_in*)&sockaddr_);
-    saddr->sin_family = family;
-    saddr->sin_port = htons(port);
-    saddr->sin_addr = addr;
+    sockaddr_in* paddr = ((sockaddr_in*)&sockaddr_);
+    paddr->sin_family = family;
+    paddr->sin_addr = addr;
+    paddr->sin_port = htons(port);
+}
+
+address::address(std::string addr, unsigned short port)
+    : sockaddr_({0})
+{
+    sockaddr_in saddr;
+    ::inet_pton(AF_INET, addr.c_str(), &saddr.sin_addr);
+
+    sockaddr_in* paddr = ((sockaddr_in*)&sockaddr_);
+    paddr->sin_family = saddr.sin_family;
+    paddr->sin_addr = saddr.sin_addr;
+    paddr->sin_port = htons(port);
 }
 
 address::address(const address& other)
+    : sockaddr_({0})
 {
     // Call assigment operator
     *this = other;
 }
 
 address::address(address&& other)
+    : sockaddr_({0})
 {
     // Call move assigment operator
     *this = std::move(other);
@@ -150,7 +165,7 @@ address& address::operator=(address&& other)
     return *this;
 }
 
-std::string address::addr() const
+std::string address::str() const
 {
     const sockaddr_in* sa = operator const sockaddr_in*();
     char str[INET_ADDRSTRLEN] = {0};
@@ -201,7 +216,7 @@ const server& server::bind(std::string conn)
 {
     conn_ctx_ = parse_connection_string(conn);
 
-    bind_addr_ = std::move(address(conn_ctx_.family, conn_ctx_.port, conn_ctx_.addr));
+    bind_addr_ = std::move(address(conn_ctx_.family, conn_ctx_.addr, conn_ctx_.port));
     bind_sock_ = std::move(socket(conn_ctx_.family, conn_ctx_.type, conn_ctx_.protocol));
 
     int one = 1;
@@ -384,7 +399,7 @@ std::istream& operator>> (std::istream &in, ha::socket &s)
 
 std::ostream& operator<< (std::ostream &out, ha::address &a)
 {
-    out << a.addr();
+    out << a.str();
     return out;
 }
 

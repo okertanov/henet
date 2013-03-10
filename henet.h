@@ -69,12 +69,13 @@ class address
     public:
         address();
         address(sockaddr saddr);
-        address(short family, unsigned short port, in_addr addr);
+        address(short family, in_addr addr, unsigned short port);
+        address(std::string addr, unsigned short port);
         address(const address& other);
         address(address&& other);
         virtual ~address();
 
-        std::string addr() const;
+        std::string str() const;
 
         address& operator=(const address&);
         address& operator=(address&&);
