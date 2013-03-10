@@ -10,29 +10,71 @@ namespace ha
 {
 
 socket::socket()
+    : socket_(-1)
 {
 }
 
 socket::socket(int socket)
+    : socket_(socket)
 {
-    socket_ = socket;
 }
 
 socket::socket(int domain, int type, int protocol)
+    : socket_(::socket(domain, type, protocol))
 {
-    socket_ = ::socket(domain, type, protocol);
     if (socket_ < 0)
     {
         throw std::runtime_error("Invalid socket.");
     }
 }
 
+socket::socket(const socket& other)
+    : socket_(-1)
+{
+    // Call assigment operator
+    *this = other;
+}
+
+socket::socket(socket&& other)
+    : socket_(-1)
+{
+    // Call move assigment operator
+    *this = std::move(other);
+}
+
 socket::~socket()
+{
+    close();
+}
+
+void socket::close()
 {
     if (socket_ >= 0)
     {
         ::close(socket_);
+        socket_ = -1;
     }
+}
+
+socket& socket::operator=(const socket& other)
+{
+    if (this != &other)
+    {
+        socket_ = other.socket_;
+    }
+
+    return *this;
+}
+
+socket& socket::operator=(socket&& other)
+{
+    if (this != &other)
+    {
+        socket_ = other.socket_;
+        other.socket_ = -1;
+    }
+
+    return *this;
 }
 
 int socket::operator=(int socket)
@@ -42,18 +84,24 @@ int socket::operator=(int socket)
     return socket_;
 }
 
-socket::operator int()
+socket::operator const int() const
 {
     return socket_;
 }
 
-socket::operator int*()
+socket::operator const int*() const
 {
     return &socket_;
 }
 
 address::address()
+    : sockaddr_({0})
 {
+}
+
+address::address(sockaddr saddr)
+{
+    sockaddr_ = saddr;
 }
 
 address::address(short family, unsigned short port, in_addr addr)
@@ -64,32 +112,79 @@ address::address(short family, unsigned short port, in_addr addr)
     saddr->sin_addr = addr;
 }
 
+address::address(const address& other)
+{
+    // Call assigment operator
+    *this = other;
+}
+
+address::address(address&& other)
+{
+    // Call move assigment operator
+    *this = std::move(other);
+}
+
 address::~address()
 {
     ::memset(&sockaddr_, 0, sizeof(sockaddr));
 }
 
-address::operator sockaddr()
+address& address::operator=(const address& other)
+{
+    if (this != &other)
+    {
+        sockaddr_ = other.sockaddr_;
+    }
+
+    return *this;
+}
+
+address& address::operator=(address&& other)
+{
+    if (this != &other)
+    {
+        sockaddr_ = other.sockaddr_;
+        ::memset(&other.sockaddr_, 0, sizeof(sockaddr));
+    }
+
+    return *this;
+}
+
+std::string address::addr() const
+{
+    const sockaddr_in* sa = operator const sockaddr_in*();
+    char str[INET_ADDRSTRLEN] = {0};
+    const char* rc = ::inet_ntop(sa->sin_family, &sa->sin_addr.s_addr, str, INET_ADDRSTRLEN);
+
+    if (rc == 0)
+    {
+        throw std::runtime_error(::strerror(errno));
+    }
+
+    return std::string(str);
+}
+
+address::operator const sockaddr() const
 {
     return sockaddr_;
 }
 
-address::operator sockaddr*()
+address::operator const sockaddr*() const
 {
     return &sockaddr_;
 }
 
-address::operator sockaddr_in()
+address::operator const sockaddr_in() const
 {
     return (*((sockaddr_in*)&sockaddr_));
 }
 
-address::operator sockaddr_in*()
+address::operator const sockaddr_in*() const
 {
     return ((sockaddr_in*)&sockaddr_);
 }
 
-size_t address::size()
+size_t address::size() const
 {
     return sizeof(sockaddr_);
 }
@@ -102,12 +197,12 @@ server::~server()
 {
 }
 
-server& server::bind(std::string conn)
+const server& server::bind(std::string conn)
 {
     conn_ctx_ = parse_connection_string(conn);
 
-    bind_addr_ = address(conn_ctx_.family, conn_ctx_.port, conn_ctx_.addr);
-    bind_sock_ = socket(conn_ctx_.domain, conn_ctx_.type, conn_ctx_.protocol);
+    bind_addr_ = std::move(address(conn_ctx_.family, conn_ctx_.port, conn_ctx_.addr));
+    bind_sock_ = std::move(socket(conn_ctx_.family, conn_ctx_.type, conn_ctx_.protocol));
 
     int one = 1;
     int rc = ::setsockopt(bind_sock_, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
@@ -126,7 +221,7 @@ server& server::bind(std::string conn)
     return *this;
 }
 
-server& server::listen()
+const server& server::listen() const
 {
     int rc = ::listen(bind_sock_, SOMAXCONN);
 
@@ -138,24 +233,53 @@ server& server::listen()
     return *this;
 }
 
-server& server::dispatch(std::function<void(socket, address)> fn)
+std::pair<socket, address> server::accept() const
+{
+    sockaddr saddr;
+    size_t saddr_sz = sizeof(sockaddr);
+    socket sock(::accept(bind_sock_, &saddr, &saddr_sz));
+    address addr(saddr);
+
+    return std::make_pair(std::move(sock), std::move(addr));
+}
+
+const server& server::dispatch(std::function<void(socket, address)> fn) const
+{
+    return dispatch_impl(fn, false);
+}
+
+const server& server::dispatch_async(std::function<void(socket, address)> fn) const
+{
+    return dispatch_impl(fn, true);
+}
+
+const server& server::dispatch_impl(std::function<void(socket, address)> fn, bool async) const
 {
     std::atomic<bool> stop_cond(false);
 
     while ( !stop_cond )
     {
-        address client_address;
-        size_t client_address_sz = client_address.size();
-        socket client_sock = accept(bind_sock_, (sockaddr*)&client_address, &client_address_sz);
+        auto ac = accept();
+
+        if (!async)
+        {
+            fn(std::move(ac.first), std::move(ac.second));
+        }
+        else
+        {
+            std::thread worker([&]()
+            {
+                fn(std::move(ac.first), std::move(ac.second));
+            });
+        }
     }
 
     return *this;
 }
 
-connection server::parse_connection_string(std::string conn)
+connection server::parse_connection_string(std::string conn) const
 {
     connection connection;
-    connection.domain = PF_INET;
     connection.family = AF_INET;
     connection.type = SOCK_STREAM;
     connection.protocol = IPPROTO_TCP;
@@ -218,7 +342,7 @@ connection server::parse_connection_string(std::string conn)
     return connection;
 }
 
-std::vector<std::string> server::split_connection_string(std::string conn)
+std::vector<std::string> server::split_connection_string(std::string conn) const
 {
     const std::string delimiter = ":";
     std::vector<std::string> parts;
@@ -249,6 +373,7 @@ std::vector<std::string> server::split_connection_string(std::string conn)
 
 std::ostream& operator<< (std::ostream &out, ha::socket &s)
 {
+    out << (int)s;
     return out;
 }
 
@@ -259,6 +384,7 @@ std::istream& operator>> (std::istream &in, ha::socket &s)
 
 std::ostream& operator<< (std::ostream &out, ha::address &a)
 {
+    out << a.addr();
     return out;
 }
 

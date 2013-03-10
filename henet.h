@@ -13,22 +13,25 @@
 #include <string>
 #include <cstring>
 #include <functional>
-#include <regex>
+#include <utility>
+#include <vector>
 #include <atomic>
+#include <thread>
 #include <exception>
+#include <stdexcept>
 
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netdb.h>
-#include <unistd.h>
 
 namespace ha
 {
 
 struct connection
 {
-    int domain;     // PF_UNIX, PF_INET
     int family;     // AF_UNSPEC, AF_INET, AF_INET6, AF_UNIX/AF_LOCAL, AF_PACKET
     int type;       // SOCK_STREAM, SOCK_DGRAM, SOCK_RAW
     int protocol;   // IPPROTO_TCP, IPPROTO_UDP
@@ -40,14 +43,22 @@ struct connection
 class socket
 {
     public:
-        explicit socket();
+        socket();
         socket(int domain, int type, int protocol);
         socket(int socket);
-        ~socket();
+        socket(const socket& other);
+        socket(socket&& other);
+        virtual ~socket();
+
+        void close();
+
+        socket& operator=(const socket&);
+        socket& operator=(socket&&);
 
         int operator=(int);
-        operator int();
-        operator int*();
+
+        operator const int() const;
+        operator const int*() const;
 
     private:
         int socket_;
@@ -56,17 +67,25 @@ class socket
 class address
 {
     public:
-        explicit address();
+        address();
+        address(sockaddr saddr);
         address(short family, unsigned short port, in_addr addr);
-        ~address();
+        address(const address& other);
+        address(address&& other);
+        virtual ~address();
 
-        operator sockaddr();
-        operator sockaddr*();
+        std::string addr() const;
 
-        operator sockaddr_in();
-        operator sockaddr_in*();
+        address& operator=(const address&);
+        address& operator=(address&&);
 
-        size_t size();
+        operator const sockaddr() const;
+        operator const sockaddr*() const;
+
+        operator const sockaddr_in() const;
+        operator const sockaddr_in*() const;
+
+        size_t size() const;
 
     private:
         sockaddr sockaddr_;
@@ -75,16 +94,25 @@ class address
 class server
 {
     public:
-        explicit server();
+        server();
         virtual ~server();
 
-        server& bind(std::string conn);
-        server& listen();
-        server& dispatch(std::function<void(socket, address)> fn);
+        // No copy, no move
+        server(const server&) = delete;
+        server(server&&) = delete;
+        server& operator=(const server&) = delete;
+        server& operator=(server&&) = delete;
+
+        const server& bind(std::string conn);
+        const server& listen() const;
+        const server& dispatch(std::function<void(socket, address)> fn) const;
+        const server& dispatch_async(std::function<void(socket, address)> fn) const;
 
     private:
-        connection parse_connection_string(std::string conn);
-        std::vector<std::string> split_connection_string(std::string conn);
+        connection parse_connection_string(std::string conn) const;
+        std::vector<std::string> split_connection_string(std::string conn) const;
+        std::pair<socket, address> accept() const;
+        const server& dispatch_impl(std::function<void(socket, address)> fn, bool async) const;
 
     private:
         connection conn_ctx_;

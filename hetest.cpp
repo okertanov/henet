@@ -28,7 +28,7 @@ int main(int argc, char** argv)
                 server.bind("tcp:localhost:8080").listen();
                 server.dispatch([](ha::socket s, ha::address a)
                 {
-                    std::cout << "dispatch: connected endpoint:" << a << std::endl;
+                    std::cout << "connected endpoint: " << s << " - " << a << std::endl;
                 });
             }
             catch(std::exception& e)
