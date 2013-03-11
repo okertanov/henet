@@ -1,5 +1,5 @@
-henet - high availability network library
-=========================================
+henet - high availability networking library
+============================================
 
 &#x5D4;et
 =========
