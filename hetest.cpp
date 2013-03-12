@@ -31,11 +31,11 @@ int main(int argc, char** argv)
                 {
                     // Notify connected
                     //std::cout << "Client connected. Endpoint: " << a << ", socket: " << s << std::endl;
-                    
+
                     // Read request
                     std::vector<unsigned char> raw_request = s.read();
                     const std::string str_request(raw_request.begin(), raw_request.end());
-                    
+
                     //std::cout << "Client request: " << std::endl << str_request << std::endl;
 
                     // Send reply
@@ -50,11 +50,11 @@ int main(int argc, char** argv)
                            << crlf;
                     const std::string str_reply = stream.str();
                     const std::vector<unsigned char> raw_reply(str_reply.begin(), str_reply.end());
-                    
+
                     std::unique_lock<std::mutex> lock(m);
                     s.write(raw_reply);
                     s.write_file(argv[0]);
-                    
+
                     //std::cout << "Reply sent: " << std::endl << str_reply << std::endl;
                 });
             }

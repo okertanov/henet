@@ -286,6 +286,7 @@ address::operator const sockaddr_in*() const
 
 server::server()
 {
+    ::signal(SIGPIPE, SIG_IGN);
 }
 
 server::~server()
@@ -299,16 +300,25 @@ const server& server::bind(std::string conn)
     bind_addr_ = std::move(address(conn_ctx_.family, conn_ctx_.addr, conn_ctx_.port));
     bind_sock_ = std::move(socket(conn_ctx_.family, conn_ctx_.type, conn_ctx_.protocol));
 
-    int one = 1;
-    int rc = ::setsockopt(bind_sock_, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-
-    if ( rc < 0 )
+    int reuse = 1;
+    int rc1 = ::setsockopt(bind_sock_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int));
+    if ( rc1 < 0 )
     {
-        throw std::runtime_error("Setting socket options failed.");
+        throw std::runtime_error("Setting socket options SO_REUSEADDR failed.");
     }
 
-    rc = ::bind(bind_sock_, bind_addr_, bind_addr_.size());
-    if (rc != 0)
+    #ifdef BSD
+    int nosigpipe = 1;
+    int rc2 = ::setsockopt(bind_sock_, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, sizeof(int));
+    if ( rc2 < 0 )
+    {
+        throw std::runtime_error("Setting socket options SO_NOSIGPIPE failed.");
+    }
+    #endif // BSD
+
+
+    int rc3 = ::bind(bind_sock_, bind_addr_, bind_addr_.size());
+    if (rc3 != 0)
     {
         throw std::runtime_error("Binding socket failed.");
     }
@@ -359,16 +369,18 @@ const server& server::dispatch_impl(std::function<void(socket, address, std::mut
 
         if (!async)
         {
-            fn(pac->first, pac->second, iomutex_);
+            fn(std::move(pac->first), std::move(pac->second), std::ref(iomutex_));
         }
         else
         {
-            std::thread worker([pac, fn, this]()
+            std::thread worker([]
+                (std::function<void(socket, address, std::mutex&)> fn,
+                 std::shared_ptr<std::pair<socket, address>> pac, std::mutex& m)
             {
-                fn(pac->first, pac->second, this->iomutex_);
-                
+                fn(std::move(pac->first), std::move(pac->second), std::ref(m));
+
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            });
+            }, std::ref(fn), pac, std::ref(iomutex_));
 
             if (worker.joinable())
             {
