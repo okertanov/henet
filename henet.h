@@ -17,6 +17,8 @@
 #include <vector>
 #include <atomic>
 #include <thread>
+#include <future>
+#include <chrono>
 #include <exception>
 #include <stdexcept>
 
@@ -84,6 +86,7 @@ class address
         virtual ~address();
 
         std::string str() const;
+        socklen_t size() const;
 
         address& operator=(const address&);
         address& operator=(address&&);
@@ -93,8 +96,6 @@ class address
 
         operator const sockaddr_in() const;
         operator const sockaddr_in*() const;
-
-        size_t size() const;
 
     private:
         sockaddr sockaddr_;
@@ -114,19 +115,20 @@ class server
 
         const server& bind(std::string conn);
         const server& listen() const;
-        const server& dispatch(std::function<void(socket, address)> fn) const;
-        const server& dispatch_async(std::function<void(socket, address)> fn) const;
+        const server& dispatch(std::function<void(socket, address, std::mutex&)> fn) const;
+        const server& dispatch_async(std::function<void(socket, address, std::mutex&)> fn) const;
 
     private:
         connection parse_connection_string(std::string conn) const;
         std::vector<std::string> split_connection_string(std::string conn) const;
         std::pair<socket, address> accept() const;
-        const server& dispatch_impl(std::function<void(socket, address)> fn, bool async) const;
+        const server& dispatch_impl(std::function<void(socket, address, std::mutex&)> fn, bool async) const;
 
     private:
         connection conn_ctx_;
         address bind_addr_;
         socket bind_sock_;
+        mutable std::mutex iomutex_;
 };
 
 } /* namespace ha */

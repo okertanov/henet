@@ -37,7 +37,7 @@
       </toolsSet>
       <compileType>
         <ccTool>
-          <commandLine>-std=gnu++0x -pthread -lpthread -lresolv</commandLine>
+          <commandLine>-std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT</commandLine>
           <warningLevel>2</warningLevel>
         </ccTool>
       </compileType>
@@ -59,7 +59,7 @@
         </cTool>
         <ccTool>
           <developmentMode>5</developmentMode>
-          <commandLine>-std=gnu++0x -pthread -lpthread -lresolv</commandLine>
+          <commandLine>-std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT</commandLine>
           <warningLevel>2</warningLevel>
         </ccTool>
         <fortranCompilerTool>

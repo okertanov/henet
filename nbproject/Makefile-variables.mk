@@ -9,19 +9,19 @@ CND_DISTDIR=dist
 # Debug configuration
 CND_PLATFORM_Debug=GNU-Linux-x86
 CND_ARTIFACT_DIR_Debug=dist/Debug/GNU-Linux-x86
-CND_ARTIFACT_NAME_Debug=henet
-CND_ARTIFACT_PATH_Debug=dist/Debug/GNU-Linux-x86/henet
+CND_ARTIFACT_NAME_Debug=henet.git
+CND_ARTIFACT_PATH_Debug=dist/Debug/GNU-Linux-x86/henet.git
 CND_PACKAGE_DIR_Debug=dist/Debug/GNU-Linux-x86/package
-CND_PACKAGE_NAME_Debug=henet.tar
-CND_PACKAGE_PATH_Debug=dist/Debug/GNU-Linux-x86/package/henet.tar
+CND_PACKAGE_NAME_Debug=henet.git.tar
+CND_PACKAGE_PATH_Debug=dist/Debug/GNU-Linux-x86/package/henet.git.tar
 # Release configuration
 CND_PLATFORM_Release=GNU-Linux-x86
 CND_ARTIFACT_DIR_Release=dist/Release/GNU-Linux-x86
-CND_ARTIFACT_NAME_Release=henet
-CND_ARTIFACT_PATH_Release=dist/Release/GNU-Linux-x86/henet
+CND_ARTIFACT_NAME_Release=henet.git
+CND_ARTIFACT_PATH_Release=dist/Release/GNU-Linux-x86/henet.git
 CND_PACKAGE_DIR_Release=dist/Release/GNU-Linux-x86/package
-CND_PACKAGE_NAME_Release=henet.tar
-CND_PACKAGE_PATH_Release=dist/Release/GNU-Linux-x86/package/henet.tar
+CND_PACKAGE_NAME_Release=henet.git.tar
+CND_PACKAGE_PATH_Release=dist/Release/GNU-Linux-x86/package/henet.git.tar
 #
 # include compiler specific variables
 #

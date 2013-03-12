@@ -31,14 +31,14 @@ socket::socket(int domain, int type, int protocol)
 socket::socket(const socket& other)
     : socket_(-1)
 {
-    // Call assigment operator
+    // Call assignment operator
     *this = other;
 }
 
 socket::socket(socket&& other)
     : socket_(-1)
 {
-    // Call move assigment operator
+    // Call move assignment operator
     *this = std::move(other);
 }
 
@@ -72,7 +72,7 @@ size_t socket::write(const std::vector<unsigned char>& buffer) const
 
         if (wr < 0)
         {
-            throw std::runtime_error(::strerror(errno));
+            throw std::runtime_error(std::string("write() exception: ") + ::strerror(errno));
         }
 
         rc = static_cast<size_t>(wr);
@@ -208,14 +208,14 @@ address::address(std::string addr, unsigned short port)
 address::address(const address& other)
     : sockaddr_({0})
 {
-    // Call assigment operator
+    // Call assignment operator
     *this = other;
 }
 
 address::address(address&& other)
     : sockaddr_({0})
 {
-    // Call move assigment operator
+    // Call move assignment operator
     *this = std::move(other);
 }
 
@@ -251,12 +251,17 @@ std::string address::str() const
     char str[INET_ADDRSTRLEN] = {0};
     const char* rc = ::inet_ntop(sa->sin_family, &sa->sin_addr.s_addr, str, INET_ADDRSTRLEN);
 
-    if (rc == 0)
+    /*if (rc == 0)
     {
         throw std::runtime_error(::strerror(errno));
-    }
+    }*/
 
-    return std::string(str);
+    return std::string(rc == 0 ? "<unknow address>" : str);
+}
+
+socklen_t address::size() const
+{
+    return sizeof(sockaddr_);
 }
 
 address::operator const sockaddr() const
@@ -277,11 +282,6 @@ address::operator const sockaddr_in() const
 address::operator const sockaddr_in*() const
 {
     return ((sockaddr_in*)&sockaddr_);
-}
-
-size_t address::size() const
-{
-    return sizeof(sockaddr_);
 }
 
 server::server()
@@ -331,41 +331,49 @@ const server& server::listen() const
 std::pair<socket, address> server::accept() const
 {
     sockaddr saddr;
-    size_t saddr_sz = sizeof(sockaddr);
+    socklen_t saddr_sz = sizeof(sockaddr);
     socket sock(::accept(bind_sock_, &saddr, &saddr_sz));
     address addr(saddr);
 
     return std::make_pair(std::move(sock), std::move(addr));
 }
 
-const server& server::dispatch(std::function<void(socket, address)> fn) const
+const server& server::dispatch(std::function<void(socket, address, std::mutex&)> fn) const
 {
     return dispatch_impl(fn, false);
 }
 
-const server& server::dispatch_async(std::function<void(socket, address)> fn) const
+const server& server::dispatch_async(std::function<void(socket, address, std::mutex&)> fn) const
 {
     return dispatch_impl(fn, true);
 }
 
-const server& server::dispatch_impl(std::function<void(socket, address)> fn, bool async) const
+const server& server::dispatch_impl(std::function<void(socket, address, std::mutex&)> fn, bool async) const
 {
     std::atomic<bool> stop_cond(false);
 
     while ( !stop_cond )
     {
-        auto ac = accept();
+        std::shared_ptr<std::pair<socket, address>> pac =
+            std::make_shared<std::pair<socket, address>>(accept());
 
         if (!async)
         {
-            fn(std::move(ac.first), std::move(ac.second));
+            fn(pac->first, pac->second, iomutex_);
         }
         else
         {
-            std::thread worker([&]()
+            std::thread worker([pac, fn, this]()
             {
-                fn(std::move(ac.first), std::move(ac.second));
+                fn(pac->first, pac->second, this->iomutex_);
+                
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             });
+
+            if (worker.joinable())
+            {
+                worker.detach();
+            }
         }
     }
 

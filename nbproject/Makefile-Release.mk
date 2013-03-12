@@ -43,8 +43,8 @@ OBJECTFILES= \
 CFLAGS=
 
 # CC Compiler Flags
-CCFLAGS=-std=gnu++0x -pthread -lpthread -lresolv
-CXXFLAGS=-std=gnu++0x -pthread -lpthread -lresolv
+CCFLAGS=-std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT
+CXXFLAGS=-std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT
 
 # Fortran Compiler Flags
 FFLAGS=
@@ -57,21 +57,21 @@ LDLIBSOPTIONS=
 
 # Build Targets
 .build-conf: ${BUILD_SUBPROJECTS}
-	"${MAKE}"  -f nbproject/Makefile-${CND_CONF}.mk ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/henet
+	"${MAKE}"  -f nbproject/Makefile-${CND_CONF}.mk ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/henet.git
 
-${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/henet: ${OBJECTFILES}
+${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/henet.git: ${OBJECTFILES}
 	${MKDIR} -p ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}
-	${LINK.cc} -o ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/henet ${OBJECTFILES} ${LDLIBSOPTIONS}
+	${LINK.cc} -o ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/henet.git ${OBJECTFILES} ${LDLIBSOPTIONS}
 
 ${OBJECTDIR}/henet.o: henet.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -O2 -Wall -std=gnu++0x -pthread -lpthread -lresolv -MMD -MP -MF $@.d -o ${OBJECTDIR}/henet.o henet.cpp
+	$(COMPILE.cc) -O2 -Wall -std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT -MMD -MP -MF $@.d -o ${OBJECTDIR}/henet.o henet.cpp
 
 ${OBJECTDIR}/hetest.o: hetest.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -O2 -Wall -std=gnu++0x -pthread -lpthread -lresolv -MMD -MP -MF $@.d -o ${OBJECTDIR}/hetest.o hetest.cpp
+	$(COMPILE.cc) -O2 -Wall -std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT -MMD -MP -MF $@.d -o ${OBJECTDIR}/hetest.o hetest.cpp
 
 # Subprojects
 .build-subprojects:
@@ -79,7 +79,7 @@ ${OBJECTDIR}/hetest.o: hetest.cpp
 # Clean Targets
 .clean-conf: ${CLEAN_SUBPROJECTS}
 	${RM} -r ${CND_BUILDDIR}/${CND_CONF}
-	${RM} ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/henet
+	${RM} ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/henet.git
 
 # Subprojects
 .clean-subprojects:

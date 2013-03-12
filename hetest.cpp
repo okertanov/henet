@@ -26,29 +26,36 @@ int main(int argc, char** argv)
             try
             {
                 ha::server server;
-                server.bind("tcp:localhost:8080").listen();
-                server.dispatch([&](ha::socket s, ha::address a)
+                server.bind("tcp::8080").listen();
+                server.dispatch_async([&](ha::socket s, ha::address a, std::mutex& m)
                 {
+                    // Notify connected
+                    //std::cout << "Client connected. Endpoint: " << a << ", socket: " << s << std::endl;
+                    
                     // Read request
-                    std::cout << "Client connected. Endpoint: " << a << ", socket: " << s << std::endl;
                     std::vector<unsigned char> raw_request = s.read();
                     const std::string str_request(raw_request.begin(), raw_request.end());
-                    std::cout << "Client request: " << std::endl << str_request << std::endl;
+                    
+                    //std::cout << "Client request: " << std::endl << str_request << std::endl;
 
                     // Send reply
                     const char crlf[] = "\x0D\x0A";
-                    std::stringstream sstream;
-                    sstream << "HTTP/1.1 200 OK" << crlf
-                            << "Content-type: application/octet-stream" << crlf
-                            << "Content-Transfer-Encoding: 8bit" << crlf
-                            //<< "Content-Length: " << 0 << crlf
-                            << "Server: henet" << crlf
-                            << "Connection: close" << crlf
-                            << crlf;
-                    const std::string str_reply = sstream.str();
+                    std::stringstream stream;
+                    stream << "HTTP/1.1 200 OK" << crlf
+                           << "Server: henet" << crlf
+                           << "Content-type: application/octet-stream" << crlf
+                           << "Content-Transfer-Encoding: 8bit" << crlf
+                           //<< "Content-Length: " << 0 << crlf
+                           << "Connection: close" << crlf
+                           << crlf;
+                    const std::string str_reply = stream.str();
                     const std::vector<unsigned char> raw_reply(str_reply.begin(), str_reply.end());
+                    
+                    std::unique_lock<std::mutex> lock(m);
                     s.write(raw_reply);
                     s.write_file(argv[0]);
+                    
+                    //std::cout << "Reply sent: " << std::endl << str_reply << std::endl;
                 });
             }
             catch(std::exception& e)
