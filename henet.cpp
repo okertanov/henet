@@ -88,9 +88,9 @@ size_t socket::write_file(std::string filename) const
 
     try
     {
-        // @todo convert to RAII
-        fd = ::open(filename.c_str(), O_RDONLY);
-
+        // RAII technique to acquire/release file handle
+        scoped_resource<int> fd([&filename](){ return ::open(filename.c_str(), O_RDONLY); }, ::close);
+        
         if (fd == -1)
         {
             throw std::runtime_error(std::string("open() exception: ") + ::strerror(errno));
@@ -284,6 +284,76 @@ address::operator const sockaddr_in*() const
     return ((sockaddr_in*)&sockaddr_);
 }
 
+mutex::mutex()
+{
+    int rc = ::pthread_mutex_init(&mutex_, 0);
+    
+    if (rc)
+    {
+        throw std::runtime_error("mutex::mutex() error.");
+    }
+}
+
+mutex::~mutex()
+{
+    int rc;
+    
+    do
+    {
+        rc = ::pthread_mutex_destroy(&mutex_);
+    }
+    while (rc == EINTR);
+}
+
+bool mutex::try_lock()
+{
+    int rc = 0;
+    do
+    {
+        rc = ::pthread_mutex_trylock(&mutex_);
+    }
+    while (rc == EINTR);
+    
+    if(rc && (rc!=EBUSY))
+    {
+        throw std::runtime_error("mutex::try_lock error.");
+    }
+
+    return !rc;
+}
+
+void mutex::lock()
+{
+    int rc;
+    
+    do
+    {
+        rc = ::pthread_mutex_lock(&mutex_);
+    }
+    while (rc == EINTR);
+    
+    if(rc)
+    {
+        throw std::runtime_error("mutex::lock error.");
+    }
+}
+
+void mutex::unlock()
+{
+    int rc;
+    
+    do
+    {
+        rc = ::pthread_mutex_unlock(&mutex_);
+    }
+    while (rc == EINTR);
+    
+    if(rc)
+    {
+        throw std::runtime_error("mutex::unlock error.");
+    }
+}
+
 server::server()
 {
     ::signal(SIGPIPE, SIG_IGN);
@@ -392,9 +462,9 @@ const server& server::dispatch_impl(std::function<void(socket, address, std::mut
     return *this;
 }
 
-connection server::parse_connection_string(std::string conn) const
+connection_info server::parse_connection_string(std::string conn) const
 {
-    connection connection;
+    connection_info connection;
     connection.family = AF_INET;
     connection.type = SOCK_STREAM;
     connection.protocol = IPPROTO_TCP;

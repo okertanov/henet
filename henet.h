@@ -37,7 +37,7 @@
 namespace ha
 {
 
-struct connection
+struct connection_info
 {
     int family;     // AF_UNSPEC, AF_INET, AF_INET6, AF_UNIX/AF_LOCAL, AF_PACKET
     int type;       // SOCK_STREAM, SOCK_DGRAM, SOCK_RAW
@@ -102,6 +102,50 @@ class address
         sockaddr sockaddr_;
 };
 
+class mutex
+{
+    public:
+        mutex();
+        ~mutex();
+        
+        bool try_lock();
+        void lock();
+        void unlock();
+        
+        // No copy, no move
+        mutex(const mutex&) = delete;
+        mutex(mutex&&) = delete;
+        mutex& operator=(const mutex&) = delete;
+        mutex& operator=(mutex&&) = delete;
+    
+    private:
+        pthread_mutex_t mutex_;
+};
+
+template<typename T, typename... A>
+class scoped_resource
+{
+    public:
+        typedef std::function<T (A...)> initializer_t;
+        typedef std::function<void(T)> finalizer_t;
+        scoped_resource(initializer_t finit, A... args, finalizer_t final)
+            : finit_(finit), final_(final), resource_(finit_(args...)) { };
+        ~scoped_resource() { final_(resource_); }
+
+        operator T() const  { return resource_; }
+       
+        // No copy, no move
+        scoped_resource(const scoped_resource&) = delete;
+        scoped_resource(scoped_resource&&) = delete;
+        scoped_resource& operator=(const scoped_resource&) = delete;
+        scoped_resource& operator=(scoped_resource&&) = delete;
+        
+    private:
+        const initializer_t finit_;
+        const finalizer_t final_;
+        T resource_;
+};
+
 class server
 {
     public:
@@ -120,13 +164,13 @@ class server
         const server& dispatch_async(std::function<void(socket, address, std::mutex&)> fn) const;
 
     private:
-        connection parse_connection_string(std::string conn) const;
+        connection_info parse_connection_string(std::string conn) const;
         std::vector<std::string> split_connection_string(std::string conn) const;
         std::pair<socket, address> accept() const;
         const server& dispatch_impl(std::function<void(socket, address, std::mutex&)> fn, bool async) const;
 
     private:
-        connection conn_ctx_;
+        connection_info conn_ctx_;
         address bind_addr_;
         socket bind_sock_;
         mutable std::mutex iomutex_;

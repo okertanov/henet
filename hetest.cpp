@@ -19,7 +19,19 @@ int main(int argc, char** argv)
     try
     {
         std::cout << "Starting..." << std::endl;
-
+        
+        // Some primitive unit testing
+        volatile char* a = 0;
+        {
+            // RAII technique to acquire/release memory block
+            ha::scoped_resource<void*, size_t> mem(::malloc, 1, ::free);
+            memset(mem, 65, 1);
+            a = (char*)(void*)mem;
+            std::cout << "Hello, " << "[" << *a << "]" << std::endl;
+        }
+        /// @warning Unsafe!
+        std::cout << "Hello again, " << "[" << *a << "]" << std::endl;
+        
         std::cout << "Launching server thread..." << std::endl;
         std::thread server_thread([&]()
         {
