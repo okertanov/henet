@@ -21,7 +21,7 @@ int main(int argc, char** argv)
     try
     {
         std::cout << "Starting..." << std::endl;
-        
+
         // Some primitive unit testing
         volatile char* a = 0;
         {
@@ -39,11 +39,11 @@ int main(int argc, char** argv)
             assert(fd != -1);
             int raw_fd1 = fd.get();
             assert(raw_fd1 != -1);
-            
+
             int raw_fd2 = fd.operator  int();
             assert(raw_fd2 != -1);
         }
-        
+
         {
             ha::mutex mutex;
             ha::scoped_resource<ha::mutex*, ha::mutex*> scoped_lock(
@@ -58,7 +58,7 @@ int main(int argc, char** argv)
                 }
             );
         }
-        
+
         std::cout << "Launching server thread..." << std::endl;
         std::thread server_thread([&]()
         {

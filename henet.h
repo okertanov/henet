@@ -107,17 +107,17 @@ class mutex
     public:
         mutex();
         ~mutex();
-        
+
         bool try_lock();
         void lock();
         void unlock();
-        
+
         // No copy, no move
         mutex(const mutex&) = delete;
         mutex(mutex&&) = delete;
         mutex& operator=(const mutex&) = delete;
         mutex& operator=(mutex&&) = delete;
-    
+
     private:
         pthread_mutex_t mutex_;
 };
@@ -128,6 +128,7 @@ class scoped_resource
     public:
         typedef std::function<T (A...)> initializer_t;
         typedef std::function<void(T)> finalizer_t;
+        typedef T resource_t;
         scoped_resource(initializer_t finit, A... args, finalizer_t final)
             : finit_(finit), final_(final), resource_(finit_(args...)) { };
         ~scoped_resource() { final_(resource_); }
@@ -136,13 +137,13 @@ class scoped_resource
         Y get() const { return static_cast<Y>(resource_); }
         T get() const { return resource_; }
         operator T() const { return get(); }
-       
+
         // No copy, no move
         scoped_resource(const scoped_resource&) = delete;
         scoped_resource(scoped_resource&&) = delete;
         scoped_resource& operator=(const scoped_resource&) = delete;
         scoped_resource& operator=(scoped_resource&&) = delete;
-        
+
     private:
         const initializer_t finit_;
         const finalizer_t final_;
