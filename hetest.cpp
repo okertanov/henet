@@ -10,6 +10,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <cassert>
+#include <functional>
 
 #include "henet.h"
 
@@ -41,6 +42,21 @@ int main(int argc, char** argv)
             
             int raw_fd2 = fd.operator  int();
             assert(raw_fd2 != -1);
+        }
+        
+        {
+            ha::mutex mutex;
+            ha::scoped_resource<ha::mutex*, ha::mutex*> scoped_lock(
+                [](ha::mutex* m) -> ha::mutex*
+                {
+                    return m->lock(), m;
+                },
+                &mutex,
+                [](ha::mutex* m) -> void
+                {
+                    m->unlock();
+                }
+            );
         }
         
         std::cout << "Launching server thread..." << std::endl;
