@@ -13,6 +13,8 @@ Components
 ----------
 * address
 * socket
+* mutex
+* scoped_resource
 * server
 * client
 
