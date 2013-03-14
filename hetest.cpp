@@ -9,6 +9,7 @@
 #include <sstream>
 #include <iostream>
 #include <cstdlib>
+#include <cassert>
 
 #include "henet.h"
 
@@ -26,11 +27,21 @@ int main(int argc, char** argv)
             // RAII technique to acquire/release memory block
             ha::scoped_resource<void*, size_t> mem(::malloc, 1, ::free);
             memset(mem, 65, 1);
-            a = (char*)(void*)mem;
+            a = mem.get<char*>();
             std::cout << "Hello, " << "[" << *a << "]" << std::endl;
         }
         /// @warning Unsafe!
         std::cout << "Hello again, " << "[" << *a << "]" << std::endl;
+
+        {
+            ha::scoped_resource<int, char*, int> fd(::open, argv[0], O_RDONLY, ::close);
+            assert(fd != -1);
+            int raw_fd1 = fd.get();
+            assert(raw_fd1 != -1);
+            
+            int raw_fd2 = fd.operator  int();
+            assert(raw_fd2 != -1);
+        }
         
         std::cout << "Launching server thread..." << std::endl;
         std::thread server_thread([&]()

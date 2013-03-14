@@ -122,7 +122,7 @@ class mutex
         pthread_mutex_t mutex_;
 };
 
-template<typename T, typename... A>
+template <typename T, typename... A>
 class scoped_resource
 {
     public:
@@ -132,7 +132,10 @@ class scoped_resource
             : finit_(finit), final_(final), resource_(finit_(args...)) { };
         ~scoped_resource() { final_(resource_); }
 
-        operator T() const  { return resource_; }
+        template <typename Y>
+        Y get() const { return static_cast<Y>(resource_); }
+        T get() const { return resource_; }
+        operator T() const { return get(); }
        
         // No copy, no move
         scoped_resource(const scoped_resource&) = delete;
