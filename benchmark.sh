@@ -9,47 +9,53 @@ image=henet.git
 debug_test=dist/Debug/GNU-Linux-x86/$image
 release_test=dist/Release/GNU-Linux-x86/$image
 
-sleep 1
+function start_ab_benchmark()
+{
+    local name=$1
+
+    sleep 1
+    $name &
+    sleep 1
+}
+
+function stop_ab_benchmark()
+{
+    local name=$1
+
+    killall $name
+
+    return 0
+}
+
+function run_ab_benchmark()
+{
+    local num=$1
+    local con=$2
+    local name=$3
+
+    ab -n $num -c $con -g $name.plt http://localhost:8080/ > $name.txt
+}
 
 #
 # Debug run
 #
-
-sleep 1
-
-$debug_test &
-
-sleep 3
-
-ab -n $ab_n -c $ab_c -g ab-debug-1.plt http://localhost:8080/ > ab-debug-1.txt
-ab -n $ab_n -c $ab_c -g ab-debug-2.plt http://localhost:8080/ > ab-debug-2.txt
-ab -n $ab_n -c $ab_c -g ab-debug-3.plt http://localhost:8080/ > ab-debug-3.txt
-
-sleep 3
-
-killall $image
+start_ab_benchmark $debug_test;
+run_ab_benchmark   $ab_n, $ab_c, "ab-debug-1";
+run_ab_benchmark   $ab_n, $ab_c, "ab-debug-2";
+run_ab_benchmark   $ab_n, $ab_c, "ab-debug-3";
+stop_ab_benchmark  $debug_test;
 
 #
 # Release run
 #
-
-sleep 1
-
-$release_test &
-
-sleep 3
-
-ab -n $ab_n -c $ab_c -g ab-release-1.plt http://localhost:8080/ > ab-release-1.txt
-ab -n $ab_n -c $ab_c -g ab-release-2.plt http://localhost:8080/ > ab-release-2.txt
-ab -n $ab_n -c $ab_c -g ab-release-3.plt http://localhost:8080/ > ab-release-3.txt
-
-sleep 3
-
-killall $image
+start_ab_benchmark $release_test;
+run_ab_benchmark   $ab_n, $ab_c, "ab-release-1";
+run_ab_benchmark   $ab_n, $ab_c, "ab-release-2";
+run_ab_benchmark   $ab_n, $ab_c, "ab-release-3";
+stop_ab_benchmark  $release_test;
 
 #
 # Render benchmark with gnuplot
 #
-
 gnuplot benchmark-ab.plt
 

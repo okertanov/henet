@@ -559,7 +559,7 @@ std::vector<std::string> server::split_connection_string(std::string conn) const
 
 namespace util
 {
-    std::set<int> ignored_errors = {EPIPE, EAGAIN};
+    std::set<int> ignored_errors = {EPIPE, ECONNRESET, EAGAIN};
 
     bool is_ignored_error(int ec)
     {
