@@ -10,17 +10,18 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <string>
 #include <cstring>
-#include <functional>
-#include <utility>
+#include <set>
 #include <vector>
+#include <string>
 #include <atomic>
 #include <thread>
 #include <future>
 #include <chrono>
+#include <utility>
 #include <exception>
 #include <stdexcept>
+#include <functional>
 
 #include <stdio.h>
 #include <fcntl.h>
@@ -179,6 +180,13 @@ class server
         socket bind_sock_;
         mutable std::mutex iomutex_;
 };
+
+namespace util
+{
+    extern std::set<int> ignored_errors;
+
+    bool is_ignored_error(int ec);
+} /* namespace util */
 
 } /* namespace ha */
 

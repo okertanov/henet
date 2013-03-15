@@ -110,7 +110,10 @@ size_t socket::write_file(std::string filename) const
 
         if (wr < 0)
         {
-            throw std::runtime_error(std::string("sendfile() exception: ") + ::strerror(errno));
+            if (!util::is_ignored_error(errno))
+            {
+                throw std::runtime_error(std::string("sendfile() exception: ") + ::strerror(errno));
+            }
         }
 
         rc = static_cast<size_t>(wr);
@@ -553,6 +556,16 @@ std::vector<std::string> server::split_connection_string(std::string conn) const
 
     return parts;
 }
+
+namespace util
+{
+    std::set<int> ignored_errors = {EPIPE, EAGAIN};
+
+    bool is_ignored_error(int ec)
+    {
+        return (ignored_errors.find(ec) != ignored_errors.end());
+    }
+} /* namespace util */
 
 } /* namespace ha */
 
