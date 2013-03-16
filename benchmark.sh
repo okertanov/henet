@@ -74,7 +74,7 @@ gnuplot << _EO_PLOT_
 #
 
 # output as png image
-set terminal png size 800,600
+set terminal pngcairo size 800,600
 
 # save file to "benchmark.png"
 set output "benchmark.png"
