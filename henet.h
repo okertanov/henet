@@ -59,8 +59,13 @@ class socket
         virtual ~socket();
 
         std::vector<unsigned char> read() const;
+        size_t write(const unsigned char* buffer, size_t size) const;
         size_t write(const std::vector<unsigned char>& buffer) const;
+        size_t write(const std::string& buffer) const;
         size_t write_file(std::string filename) const;
+
+        void reuse();
+        void nonblocking();
 
         void close();
 

@@ -35,7 +35,7 @@ int main(int argc, char** argv)
         std::cout << "Hello again, " << "[" << *a << "]" << std::endl;
 
         {
-            ha::scoped_resource<int, char*, int> fd(::open, argv[0], O_RDONLY, ::close);
+            ha::scoped_resource<int, const char*, int> fd(::open, argv[0], O_RDONLY, ::close);
             assert(fd != -1);
             int raw_fd1 = fd.get();
             assert(raw_fd1 != -1);
@@ -80,18 +80,16 @@ int main(int argc, char** argv)
                     // Send reply
                     const char crlf[] = "\x0D\x0A";
                     std::stringstream stream;
-                    stream << "HTTP/1.1 200 OK" << crlf
-                           << "Server: henet" << crlf
-                           << "Content-type: application/octet-stream" << crlf
-                           << "Content-Transfer-Encoding: 8bit" << crlf
-                           //<< "Content-Length: " << 0 << crlf
-                           << "Connection: close" << crlf
+                    stream << "HTTP/1.1 200 OK"                         << crlf
+                           << "Server: henet"                           << crlf
+                           << "Content-type: application/octet-stream"  << crlf
+                           << "Content-Transfer-Encoding: 8bit"         << crlf
+                           //<< "Content-Length: " << 0                 << crlf
+                           << "Connection: close"                       << crlf
                            << crlf;
-                    const std::string str_reply = stream.str();
-                    const std::vector<unsigned char> raw_reply(str_reply.begin(), str_reply.end());
 
                     std::unique_lock<std::mutex> lock(m);
-                    s.write(raw_reply);
+                    s.write(stream.str());
                     s.write_file(argv[0]);
 
                     //std::cout << "Reply sent: " << std::endl << str_reply << std::endl;

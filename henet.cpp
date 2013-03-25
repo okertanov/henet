@@ -49,47 +49,110 @@ socket::~socket()
 
 std::vector<unsigned char> socket::read() const
 {
-    std::vector<unsigned char> buffer(8192);
-    ssize_t rd = ::read(socket_, &buffer[0], buffer.size());
+    const ssize_t buff_size = 8192;
+    std::vector<unsigned char> buffer(buff_size);
+    ssize_t total_read = 0L;
+    ssize_t read = 0L;
 
-    if (rd < 0)
+    do
     {
-        throw std::runtime_error(::strerror(errno));
+        read = ::read(socket_, &buffer[total_read], buff_size);
+
+        if(read > 0)
+        {
+            total_read += read;
+
+            if (read >= buff_size)
+            {
+                buffer.resize(buff_size);
+            }
+            else
+            {
+                break;
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+    while (read > 0);
+
+    if (read < 0)
+    {
+        throw std::runtime_error(std::string("read() exception: ") + ::strerror(errno));
     }
 
-    buffer.resize(rd);
+    buffer.resize(total_read);
 
     return buffer;
 }
 
-size_t socket::write(const std::vector<unsigned char>& buffer) const
+size_t socket::write(const unsigned char* buffer, size_t size) const
 {
     size_t rc = 0;
 
-    if (buffer.size() > 0)
+    if (buffer && size > 0)
     {
-        ssize_t wr = ::write(socket_, &buffer[0], buffer.size());
+        ssize_t write_total = size;
+        ssize_t write_remaining = 0L;
+        ssize_t written_total = 0L;
+        ssize_t written = 0L;
 
-        if (wr < 0)
+        do
+        {
+            written = ::write(socket_, &buffer[write_remaining], write_total);
+
+            if(written > 0)
+            {
+                written_total += written;
+
+                if(written < write_total)
+                {
+                    write_total -= written;
+                    write_remaining += written;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+        while (written > 0);
+
+        if (written < 0)
         {
             throw std::runtime_error(std::string("write() exception: ") + ::strerror(errno));
         }
 
-        rc = static_cast<size_t>(wr);
+        rc = static_cast<size_t>(written_total);
     }
 
     return rc;
 }
 
+size_t socket::write(const std::vector<unsigned char>& buffer) const
+{
+    return write(&buffer[0], buffer.size());
+}
+
+size_t socket::write(const std::string& buffer) const
+{
+    return write(reinterpret_cast<const unsigned char*>(buffer.c_str()), buffer.length());
+}
+
 size_t socket::write_file(std::string filename) const
 {
     size_t rc = 0;
-    int fd = -1;
 
     try
     {
         // RAII technique to acquire/release file handle
-        scoped_resource<int> fd([&filename](){ return ::open(filename.c_str(), O_RDONLY); }, ::close);
+        scoped_resource<int, const char*, int> fd(::open, filename.c_str(), O_RDONLY, ::close);
 
         if (fd == -1)
         {
@@ -105,10 +168,10 @@ size_t socket::write_file(std::string filename) const
         }
 
         off_t foffset = 0;
-        size_t size = sb.st_size;
-        ssize_t wr = ::sendfile(socket_, fd, &foffset, size);
+        size_t file_size = sb.st_size;
+        ssize_t written = ::sendfile(socket_, fd, &foffset, file_size);
 
-        if (wr < 0)
+        if (written < 0)
         {
             if (!util::is_ignored_error(errno))
             {
@@ -116,18 +179,50 @@ size_t socket::write_file(std::string filename) const
             }
         }
 
-        rc = static_cast<size_t>(wr);
+        rc = static_cast<size_t>(written);
     }
     catch(std::exception& e)
     {
-        ::close(fd);
-
         throw;
     }
 
-    ::close(fd);
-
     return rc;
+}
+
+void socket::reuse()
+{
+    if (socket_ >= 0)
+    {
+        int reuse = 1;
+        int rc = ::setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int));
+        if ( rc < 0 )
+        {
+            throw std::runtime_error(
+                    std::string("socket::reuse()exception: Setting socket options SO_REUSEADDR failed: ") +
+                    + ::strerror(errno));
+        }
+    }
+}
+
+void socket::nonblocking()
+{
+    if (socket_ >= 0)
+    {
+        int flags = ::fcntl(socket_, F_GETFL, 0);
+
+        if (flags == -1)
+        {
+            throw std::runtime_error(std::string("fcntl() exception: ") + ::strerror(errno));
+        }
+
+        flags |= O_NONBLOCK;
+        int rc = ::fcntl(socket_, F_SETFL, flags);
+
+        if (rc == -1)
+        {
+            throw std::runtime_error(std::string("fcntl() exception: ") + ::strerror(errno));
+        }
+    }
 }
 
 void socket::close()
@@ -200,12 +295,27 @@ address::address(std::string addr, unsigned short port)
     : sockaddr_({0})
 {
     sockaddr_in saddr;
-    ::inet_pton(AF_INET, addr.c_str(), &saddr.sin_addr);
 
-    sockaddr_in* paddr = ((sockaddr_in*)&sockaddr_);
-    paddr->sin_family = saddr.sin_family;
-    paddr->sin_addr = saddr.sin_addr;
-    paddr->sin_port = htons(port);
+    int rc = ::inet_pton(AF_INET, addr.c_str(), &saddr.sin_addr);
+
+    if (rc > 0)
+    {
+        sockaddr_in* paddr = ((sockaddr_in*)&sockaddr_);
+        paddr->sin_family = saddr.sin_family;
+        paddr->sin_addr = saddr.sin_addr;
+        paddr->sin_port = htons(port);
+    }
+    else
+    {
+        if (rc == 0)
+        {
+            throw std::runtime_error(std::string("inet_pton() exception: ") + "Network address is not valid.");
+        }
+        else
+        {
+            throw std::runtime_error(std::string("inet_pton() exception: ") + ::strerror(errno));
+        }
+    }
 }
 
 address::address(const address& other)
@@ -373,12 +483,7 @@ const server& server::bind(std::string conn)
     bind_addr_ = std::move(address(conn_ctx_.family, conn_ctx_.addr, conn_ctx_.port));
     bind_sock_ = std::move(socket(conn_ctx_.family, conn_ctx_.type, conn_ctx_.protocol));
 
-    int reuse = 1;
-    int rc1 = ::setsockopt(bind_sock_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int));
-    if ( rc1 < 0 )
-    {
-        throw std::runtime_error("Setting socket options SO_REUSEADDR failed.");
-    }
+    bind_sock_.reuse();
 
     #ifdef BSD
     int nosigpipe = 1;
@@ -451,8 +556,6 @@ const server& server::dispatch_impl(std::function<void(socket, address, std::mut
                  std::shared_ptr<std::pair<socket, address>> pac, std::mutex& m)
             {
                 fn(std::move(pac->first), std::move(pac->second), std::ref(m));
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }, std::ref(fn), pac, std::ref(iomutex_));
 
             if (worker.joinable())
