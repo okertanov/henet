@@ -4,6 +4,9 @@
  * Created: 9 March 2013
  */
 
+#include <algorithm>
+
+
 #include "henet.h"
 
 namespace ha
@@ -467,6 +470,115 @@ void mutex::unlock()
     }
 }
 
+epoll::epoll()
+    : epollfd_(-1),
+      epoll_events_(),
+      wait_events_()
+{
+    epollfd_ = ::epoll_create(epoll_queue_size_hint);
+
+    if (epollfd_ < 0 )
+    {
+        throw std::runtime_error(std::string("epoll_create() exception: ") + ::strerror(errno));
+    }
+
+    epoll_events_.reserve(epoll_queue_size_hint);
+    wait_events_.reserve(epoll_queue_size_hint);
+}
+
+epoll::~epoll()
+{
+    if (epollfd_ >= 0)
+    {
+        ::close(epollfd_);
+        epollfd_ = -1;
+    }
+}
+
+const epoll& epoll::add_socket(const socket& sock)
+{
+    struct epoll_event ev = { 0 };
+    ev.data.fd = sock;
+    ev.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+
+    int rc = ::epoll_ctl(epollfd_, EPOLL_CTL_ADD, sock, &ev);
+
+    if (rc != 0)
+    {
+        throw std::runtime_error(std::string("epoll_ctl() exception: ") + ::strerror(errno));
+    }
+
+    epoll_events_.push_back(ev);
+
+    return *this;
+}
+
+const epoll& epoll::remove_socket(const socket& sock)
+{
+    struct epoll_event ev = { 0 };
+
+    int rc = ::epoll_ctl(epollfd_, EPOLL_CTL_DEL, sock, &ev);
+
+    if (rc != 0)
+    {
+        throw std::runtime_error(std::string("epoll_ctl() exception: ") + ::strerror(errno));
+    }
+
+    auto from = std::remove_if(epoll_events_.begin(), epoll_events_.end(),
+    [&sock](const std::vector<struct epoll_event>::value_type& el)
+    {
+        return el.data.fd == sock;
+    });
+    epoll_events_.erase(from, epoll_events_.end());
+
+    return *this;
+}
+
+const epoll& epoll::wait(unsigned long ms)
+{
+    if (epoll_events_.size())
+    {
+        struct epoll_event ev = { 0 };
+        wait_events_.resize(epoll_events_.size());
+        std::fill(wait_events_.begin(), wait_events_.end(), ev);
+
+        int rc = ::epoll_wait(epollfd_, &wait_events_[0], wait_events_.size(), ms ? ms : -1);
+
+        if (rc < 0)
+        {
+            throw std::runtime_error(std::string("epoll_wait() exception: ") + ::strerror(errno));
+        }
+    }
+
+    return *this;
+}
+
+const epoll& epoll::dispatch(std::function<void(epoll_state, const socket&)> fn) const
+{
+    if (wait_events_.size())
+    {
+        std::for_each(wait_events_.begin(), wait_events_.end(),
+        [&fn](const std::vector<struct epoll_event>::value_type& el)
+        {
+            epoll_state estate =
+                el.events & EPOLLERR    ? EPOLL_ERROR   :
+                el.events & EPOLLIN     ? EPOLL_READ    :
+                el.events & EPOLLPRI    ? EPOLL_READ    :
+                el.events & EPOLLRDNORM ? EPOLL_READ    :
+                el.events & EPOLLRDBAND ? EPOLL_READ    :
+                el.events & EPOLLOUT    ? EPOLL_WRITE   :
+                el.events & EPOLLWRNORM ? EPOLL_WRITE   :
+                el.events & EPOLLWRBAND ? EPOLL_WRITE   :
+                el.events & EPOLLHUP    ? EPOLL_CLOSE   :
+                                          EPOLL_UNKNOWN;
+
+            fn(estate, socket(el.data.fd));
+        });
+    }
+
+    return *this;
+}
+
 server::server()
 {
     ::signal(SIGPIPE, SIG_IGN);
@@ -543,7 +655,10 @@ const server& server::dispatch_impl(std::function<void(socket, address, std::mut
     while ( !stop_cond )
     {
         std::shared_ptr<std::pair<socket, address>> pac =
-            std::make_shared<std::pair<socket, address>>(accept());
+            std::make_shared<std::pair<socket, address>>
+            (
+                accept()
+            );
 
         if (!async)
         {

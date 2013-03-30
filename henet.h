@@ -12,6 +12,7 @@
 #include <sstream>
 #include <cstring>
 #include <set>
+#include <list>
 #include <vector>
 #include <string>
 #include <atomic>
@@ -21,6 +22,7 @@
 #include <utility>
 #include <exception>
 #include <stdexcept>
+#include <algorithm>
 #include <functional>
 
 #include <stdio.h>
@@ -34,6 +36,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/sendfile.h>
+#include <sys/epoll.h>
 
 namespace ha
 {
@@ -156,6 +159,35 @@ class scoped_resource
         T resource_;
 };
 
+enum epoll_state
+{
+    EPOLL_READ,
+    EPOLL_WRITE,
+    EPOLL_CLOSE,
+    EPOLL_ERROR,
+    EPOLL_UNKNOWN
+};
+
+class epoll
+{
+    public:
+        epoll();
+        virtual ~epoll();
+
+        const epoll& add_socket(const socket& sock);
+        const epoll& remove_socket(const socket& sock);
+
+        const epoll& wait(unsigned long ms = 0);
+        const epoll& dispatch(std::function<void(epoll_state, const socket&)> fn) const;
+
+    private:
+        static const size_t epoll_queue_size_hint = 1024;
+
+        int epollfd_;
+        std::vector<struct epoll_event> epoll_events_;
+        std::vector<struct epoll_event> wait_events_;
+};
+
 class server
 {
     public:
@@ -184,6 +216,25 @@ class server
         address bind_addr_;
         socket bind_sock_;
         mutable std::mutex iomutex_;
+};
+
+class client
+{
+    public:
+        client();
+        virtual ~client();
+
+        // No copy, no move
+        client(const server&) = delete;
+        client(server&&) = delete;
+        client& operator=(const client&) = delete;
+        client& operator=(client&&) = delete;
+
+        const client& connect(std::string conn);
+        const client& disconnect();
+
+    private:
+        socket socket_;
 };
 
 namespace util
