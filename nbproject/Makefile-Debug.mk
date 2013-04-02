@@ -43,8 +43,8 @@ OBJECTFILES= \
 CFLAGS=
 
 # CC Compiler Flags
-CCFLAGS=-std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT
-CXXFLAGS=-std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT
+CCFLAGS=-m32 -std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT
+CXXFLAGS=-m32 -std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT
 
 # Fortran Compiler Flags
 FFLAGS=

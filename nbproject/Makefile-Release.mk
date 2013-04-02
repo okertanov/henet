@@ -43,8 +43,8 @@ OBJECTFILES= \
 CFLAGS=
 
 # CC Compiler Flags
-CCFLAGS=-std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT
-CXXFLAGS=-std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT
+CCFLAGS=-m32 -std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT -ffast-math -mfpmath=sse -flto -march=native -funroll-loops
+CXXFLAGS=-m32 -std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT -ffast-math -mfpmath=sse -flto -march=native -funroll-loops
 
 # Fortran Compiler Flags
 FFLAGS=
@@ -66,12 +66,12 @@ ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/henet.git: ${OBJECTFILES}
 ${OBJECTDIR}/henet.o: henet.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -O2 -Wall -std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT -MMD -MP -MF $@.d -o ${OBJECTDIR}/henet.o henet.cpp
+	$(COMPILE.cc) -O3 -Wall -s -std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT -ffast-math -mfpmath=sse -flto -march=native -funroll-loops -MMD -MP -MF $@.d -o ${OBJECTDIR}/henet.o henet.cpp
 
 ${OBJECTDIR}/hetest.o: hetest.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -O2 -Wall -std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT -MMD -MP -MF $@.d -o ${OBJECTDIR}/hetest.o hetest.cpp
+	$(COMPILE.cc) -O3 -Wall -s -std=gnu++0x -pthread -lpthread -lresolv -D_REENTRANT -ffast-math -mfpmath=sse -flto -march=native -funroll-loops -MMD -MP -MF $@.d -o ${OBJECTDIR}/hetest.o hetest.cpp
 
 # Subprojects
 .build-subprojects:
