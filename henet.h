@@ -11,6 +11,8 @@
 #include <iostream>
 #include <sstream>
 #include <cstring>
+#include <cstdlib>
+#include <cassert>
 #include <set>
 #include <list>
 #include <vector>
@@ -67,8 +69,8 @@ class socket
         size_t write(const std::string& buffer) const;
         size_t write_file(std::string filename) const;
 
-        void reuse();
-        void nonblocking();
+        void reuse() const;
+        void nonblocking() const;
 
         void close();
 
@@ -159,7 +161,7 @@ class scoped_resource
         T resource_;
 };
 
-enum epoll_state
+enum class epoll_state
 {
     EPOLL_READ,
     EPOLL_WRITE,
@@ -177,8 +179,8 @@ class epoll
         const epoll& add_socket(const socket& sock);
         const epoll& remove_socket(const socket& sock);
 
-        const epoll& wait(unsigned long ms = 0);
-        const epoll& dispatch(std::function<void(epoll_state, const socket&)> fn) const;
+        bool wait(unsigned long ms = 0);
+        size_t dispatch(std::function<void(epoll_state, const socket&)> fn) const;
 
     private:
         static const size_t epoll_queue_size_hint = 1024;
@@ -202,14 +204,15 @@ class server
 
         const server& bind(std::string conn);
         const server& listen() const;
-        const server& dispatch(std::function<void(socket, address, std::mutex&)> fn) const;
-        const server& dispatch_async(std::function<void(socket, address, std::mutex&)> fn) const;
+        const server& accept_block(std::function<void(socket, address, std::mutex&)> fn) const;
+        const server& accept_async(std::function<void(socket, address, std::mutex&)> fn) const;
+        const server& accept_epoll(std::function<void(socket, address, std::mutex&)> fn) const;
 
     private:
         connection_info parse_connection_string(std::string conn) const;
         std::vector<std::string> split_connection_string(std::string conn) const;
         std::pair<socket, address> accept() const;
-        const server& dispatch_impl(std::function<void(socket, address, std::mutex&)> fn, bool async) const;
+        std::pair<socket, address> accept(const socket& s) const;
 
     private:
         connection_info conn_ctx_;
@@ -239,8 +242,6 @@ class client
 
 namespace util
 {
-    extern std::set<int> ignored_errors;
-
     bool is_ignored_error(int ec);
 } /* namespace util */
 

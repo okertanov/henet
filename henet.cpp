@@ -83,7 +83,10 @@ std::vector<unsigned char> socket::read() const
 
     if (read < 0)
     {
-        throw std::runtime_error(std::string("read() exception: ") + ::strerror(errno));
+        if (!util::is_ignored_error(errno))
+        {
+            throw std::runtime_error(std::string("read() exception: ") + ::strerror(errno));
+        }
     }
 
     buffer.resize(total_read);
@@ -129,7 +132,10 @@ size_t socket::write(const unsigned char* buffer, size_t size) const
 
         if (written < 0)
         {
-            throw std::runtime_error(std::string("write() exception: ") + ::strerror(errno));
+            if (!util::is_ignored_error(errno))
+            {
+                throw std::runtime_error(std::string("write() exception: ") + ::strerror(errno));
+            }
         }
 
         rc = static_cast<size_t>(written_total);
@@ -192,7 +198,7 @@ size_t socket::write_file(std::string filename) const
     return rc;
 }
 
-void socket::reuse()
+void socket::reuse() const
 {
     if (socket_ >= 0)
     {
@@ -207,7 +213,7 @@ void socket::reuse()
     }
 }
 
-void socket::nonblocking()
+void socket::nonblocking() const
 {
     if (socket_ >= 0)
     {
@@ -499,7 +505,7 @@ const epoll& epoll::add_socket(const socket& sock)
 {
     struct epoll_event ev = { 0 };
     ev.data.fd = sock;
-    ev.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+    ev.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLET | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
 
     int rc = ::epoll_ctl(epollfd_, EPOLL_CTL_ADD, sock, &ev);
 
@@ -534,26 +540,30 @@ const epoll& epoll::remove_socket(const socket& sock)
     return *this;
 }
 
-const epoll& epoll::wait(unsigned long ms)
+bool epoll::wait(unsigned long ms)
 {
+    bool rc = false;
+
     if (epoll_events_.size())
     {
         struct epoll_event ev = { 0 };
         wait_events_.resize(epoll_events_.size());
         std::fill(wait_events_.begin(), wait_events_.end(), ev);
 
-        int rc = ::epoll_wait(epollfd_, &wait_events_[0], wait_events_.size(), ms ? ms : -1);
+        int erc = ::epoll_wait(epollfd_, &wait_events_[0], wait_events_.size(), ms ? ms : -1);
 
-        if (rc < 0)
+        if (erc < 0)
         {
             throw std::runtime_error(std::string("epoll_wait() exception: ") + ::strerror(errno));
         }
+
+        rc = !!erc;
     }
 
-    return *this;
+    return rc;
 }
 
-const epoll& epoll::dispatch(std::function<void(epoll_state, const socket&)> fn) const
+size_t epoll::dispatch(std::function<void(epoll_state, const socket&)> fn) const
 {
     if (wait_events_.size())
     {
@@ -561,22 +571,22 @@ const epoll& epoll::dispatch(std::function<void(epoll_state, const socket&)> fn)
         [&fn](const std::vector<struct epoll_event>::value_type& el)
         {
             epoll_state estate =
-                el.events & EPOLLERR    ? EPOLL_ERROR   :
-                el.events & EPOLLIN     ? EPOLL_READ    :
-                el.events & EPOLLPRI    ? EPOLL_READ    :
-                el.events & EPOLLRDNORM ? EPOLL_READ    :
-                el.events & EPOLLRDBAND ? EPOLL_READ    :
-                el.events & EPOLLOUT    ? EPOLL_WRITE   :
-                el.events & EPOLLWRNORM ? EPOLL_WRITE   :
-                el.events & EPOLLWRBAND ? EPOLL_WRITE   :
-                el.events & EPOLLHUP    ? EPOLL_CLOSE   :
-                                          EPOLL_UNKNOWN;
+                el.events & EPOLLERR    ? epoll_state::EPOLL_ERROR   :
+                el.events & EPOLLIN     ? epoll_state::EPOLL_READ    :
+                el.events & EPOLLPRI    ? epoll_state::EPOLL_READ    :
+                el.events & EPOLLRDNORM ? epoll_state::EPOLL_READ    :
+                el.events & EPOLLRDBAND ? epoll_state::EPOLL_READ    :
+                el.events & EPOLLOUT    ? epoll_state::EPOLL_WRITE   :
+                el.events & EPOLLWRNORM ? epoll_state::EPOLL_WRITE   :
+                el.events & EPOLLWRBAND ? epoll_state::EPOLL_WRITE   :
+                el.events & EPOLLHUP    ? epoll_state::EPOLL_CLOSE   :
+                                          epoll_state::EPOLL_UNKNOWN;
 
             fn(estate, socket(el.data.fd));
         });
     }
 
-    return *this;
+    return wait_events_.size();
 }
 
 server::server()
@@ -630,25 +640,20 @@ const server& server::listen() const
 
 std::pair<socket, address> server::accept() const
 {
+    return accept(bind_sock_);
+}
+
+std::pair<socket, address> server::accept(const socket& sock_in) const
+{
     sockaddr saddr;
     socklen_t saddr_sz = sizeof(sockaddr);
-    socket sock(::accept(bind_sock_, &saddr, &saddr_sz));
+    socket sock_out(::accept(sock_in, &saddr, &saddr_sz));
     address addr(saddr);
 
-    return std::make_pair(std::move(sock), std::move(addr));
+    return std::make_pair(std::move(sock_out), std::move(addr));
 }
 
-const server& server::dispatch(std::function<void(socket, address, std::mutex&)> fn) const
-{
-    return dispatch_impl(fn, false);
-}
-
-const server& server::dispatch_async(std::function<void(socket, address, std::mutex&)> fn) const
-{
-    return dispatch_impl(fn, true);
-}
-
-const server& server::dispatch_impl(std::function<void(socket, address, std::mutex&)> fn, bool async) const
+const server& server::accept_block(std::function<void(socket, address, std::mutex&)> fn) const
 {
     std::atomic<bool> stop_cond(false);
 
@@ -660,24 +665,82 @@ const server& server::dispatch_impl(std::function<void(socket, address, std::mut
                 accept()
             );
 
-        if (!async)
-        {
-            fn(std::move(pac->first), std::move(pac->second), std::ref(iomutex_));
-        }
-        else
-        {
-            std::thread worker([]
-                (std::function<void(socket, address, std::mutex&)> fn,
-                 std::shared_ptr<std::pair<socket, address>> pac, std::mutex& m)
-            {
-                fn(std::move(pac->first), std::move(pac->second), std::ref(m));
-            }, std::ref(fn), pac, std::ref(iomutex_));
+        fn(std::move(pac->first), std::move(pac->second), std::ref(iomutex_));
+    }
 
-            if (worker.joinable())
-            {
-                worker.detach();
-            }
+    return *this;
+}
+
+
+const server& server::accept_async(std::function<void(socket, address, std::mutex&)> fn) const
+{
+    std::atomic<bool> stop_cond(false);
+
+    while ( !stop_cond )
+    {
+        std::shared_ptr<std::pair<socket, address>> pac =
+            std::make_shared<std::pair<socket, address>>
+            (
+                accept()
+            );
+
+        std::thread worker([]
+            (std::function<void(socket, address, std::mutex&)> fn,
+             std::shared_ptr<std::pair<socket, address>> pac, std::mutex& m)
+        {
+            fn(std::move(pac->first), std::move(pac->second), std::ref(m));
+        }, std::ref(fn), pac, std::ref(iomutex_));
+
+        if (worker.joinable())
+        {
+            worker.detach();
         }
+    }
+
+    return *this;
+}
+
+const server& server::accept_epoll(std::function<void(socket, address, std::mutex&)> fn) const
+{
+    std::atomic<bool> stop_cond(false);
+
+    epoll ep;
+    bind_sock_.nonblocking();
+    ep.add_socket(bind_sock_);
+
+    while ( !stop_cond )
+    {
+        std::cerr << "epoll wait: ";
+        bool wt = ep.wait(1000);
+        std::cerr << "ok " << wt << std::endl;
+
+        ep.dispatch([&](epoll_state state, const socket& sock)
+        {
+            if (state == epoll_state::EPOLL_READ || state == epoll_state::EPOLL_WRITE)
+            {
+                std::cerr << "epoll accept for: ";
+                std::shared_ptr<std::pair<socket, address>> pac =
+                    std::make_shared<std::pair<socket, address>>
+                    (
+                        accept(sock)
+                    );
+                std::cerr << "ok" << std::endl;
+
+                std::thread worker([]
+                    (std::function<void(socket, address, std::mutex&)> fn,
+                     std::shared_ptr<std::pair<socket, address>> pac, std::mutex& m)
+                {
+                    std::cerr << "epoll inside worker for: ";
+                    fn(std::move(pac->first), std::move(pac->second), std::ref(m));
+                    std::cerr << "ok" << std::endl;
+                }, std::ref(fn), pac, std::ref(iomutex_));
+
+                if (worker.joinable())
+                {
+                    worker.detach();
+                }
+            }
+        });
     }
 
     return *this;
@@ -777,7 +840,7 @@ std::vector<std::string> server::split_connection_string(std::string conn) const
 
 namespace util
 {
-    std::set<int> ignored_errors = {EPIPE, ECONNRESET, EAGAIN};
+    static std::set<int> ignored_errors = {EPIPE, ECONNRESET, EAGAIN};
 
     bool is_ignored_error(int ec)
     {
